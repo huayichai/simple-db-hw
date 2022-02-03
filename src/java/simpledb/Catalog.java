@@ -18,12 +18,73 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class Catalog {
 
+    // 数据库中的表
+    private static class Table {
+        private DbFile _dbFile;
+        private String _name;
+        private String _primaryKey;
+
+        public Table(DbFile file, String name, String pkeyField) {
+            _dbFile = file;
+            _name = name;
+            _primaryKey = pkeyField;
+        }
+
+        public DbFile getDbFile() {
+            return _dbFile;
+        }
+
+        public String getName() {
+            return _name;
+        }
+
+        public String getPrimaryKey() {
+            return _primaryKey;
+        }
+    };
+
+    // 方便根据id或者名字找到表
+    private static class TableHashMap {
+        private HashMap<Integer, Table> _tables_id;
+        private HashMap<String, Table> _tables_name;
+
+        public TableHashMap() {
+            _tables_id = new HashMap<Integer, Table>(); 
+            _tables_name = new HashMap<String, Table>(); 
+        }
+
+        public void addTable(DbFile file, String name, String pkeyField) {
+            Table table = new Table(file, name, pkeyField);
+            _tables_id.put(file.getId(), table);
+            _tables_name.put(name, table);
+        }
+
+        public Table getTable(int tableid) {
+            return _tables_id.get(tableid);
+        }
+
+        public Table getTable(String name) {
+            return _tables_name.get(name);
+        }
+
+        public Iterator<Integer> getTableIdIterator() {
+            return _tables_id.keySet().iterator();
+        }
+
+        public void clear() {
+            _tables_id.clear();
+            _tables_name.clear();
+        }
+    }
+
+    TableHashMap _tableHashMap;
+
     /**
      * Constructor.
      * Creates a new, empty catalog.
      */
     public Catalog() {
-        // some code goes here
+        _tableHashMap = new TableHashMap();
     }
 
     /**
@@ -36,7 +97,7 @@ public class Catalog {
      * @param pkeyField the name of the primary key field
      */
     public void addTable(DbFile file, String name, String pkeyField) {
-        // some code goes here
+        _tableHashMap.addTable(file, name, pkeyField);
     }
 
     public void addTable(DbFile file, String name) {
@@ -59,8 +120,12 @@ public class Catalog {
      * @throws NoSuchElementException if the table doesn't exist
      */
     public int getTableId(String name) throws NoSuchElementException {
-        // some code goes here
-        return 0;
+        Table table = _tableHashMap.getTable(name);
+        if (table != null) {
+            return table.getDbFile().getId();
+        } else {
+            throw new NoSuchElementException("not find table " + name);
+        }
     }
 
     /**
@@ -70,8 +135,12 @@ public class Catalog {
      * @throws NoSuchElementException if the table doesn't exist
      */
     public TupleDesc getTupleDesc(int tableid) throws NoSuchElementException {
-        // some code goes here
-        return null;
+        Table table = _tableHashMap.getTable(tableid);
+        if (table != null) {
+            return table.getDbFile().getTupleDesc();
+        } else {
+            throw new NoSuchElementException("not find id for table " + tableid);
+        }
     }
 
     /**
@@ -81,28 +150,39 @@ public class Catalog {
      *     function passed to addTable
      */
     public DbFile getDatabaseFile(int tableid) throws NoSuchElementException {
-        // some code goes here
-        return null;
+        Table table = _tableHashMap.getTable(tableid);
+        if (table != null) {
+            return table.getDbFile();
+        } else {
+            throw new NoSuchElementException("not find id for table " + tableid); 
+        }
     }
 
     public String getPrimaryKey(int tableid) {
-        // some code goes here
-        return null;
+        Table table = _tableHashMap.getTable(tableid);
+        if (table != null) {
+            return table.getPrimaryKey();
+        } else {
+            throw new NoSuchElementException("not find id for table " + tableid); 
+        }
     }
 
     public Iterator<Integer> tableIdIterator() {
-        // some code goes here
-        return null;
+        return _tableHashMap.getTableIdIterator();
     }
 
     public String getTableName(int id) {
-        // some code goes here
-        return null;
+        Table table = _tableHashMap.getTable(id);
+        if (table != null) {
+            return table.getName();
+        } else {
+            throw new NoSuchElementException("not find id for table " + id); 
+        }
     }
     
     /** Delete all tables from the catalog */
     public void clear() {
-        // some code goes here
+        _tableHashMap.clear();
     }
     
     /**
