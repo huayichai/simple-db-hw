@@ -114,8 +114,8 @@ public class TupleDesc implements Serializable {
      *             if i is not a valid field reference.
      */
     public Type getFieldType(int i) throws NoSuchElementException {
-        if (i < 0 || i > _tditems.length) {
-            throw new NoSuchElementException("pos " + i + "is not a valid index");
+        if (i < 0 || i >= _tditems.length) {
+            throw new NoSuchElementException("pos " + i + " is not a valid index");
         }
         return _tditems[i].fieldType;
     }
