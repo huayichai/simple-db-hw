@@ -135,7 +135,7 @@ public class TupleDesc implements Serializable {
                 return i;
             }
         }
-        throw new NoSuchElementException(" not find fieldName " + name);
+        throw new NoSuchElementException("not find fieldName " + name);
     }
 
     /**
