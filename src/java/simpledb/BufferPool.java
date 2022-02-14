@@ -2,7 +2,6 @@ package simpledb;
 
 import java.io.*;
 
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.ArrayList;
 import java.util.HashMap;
 
@@ -29,7 +28,7 @@ public class BufferPool {
     public static final int DEFAULT_PAGES = 50;
 
     private int _numPages;
-    private HashMap<Integer, Page> _pagesHashMap;
+    private HashMap<PageId, Page> _pagesHashMap;
     /**
      * Creates a BufferPool that caches up to numPages pages.
      *
@@ -37,7 +36,7 @@ public class BufferPool {
      */
     public BufferPool(int numPages) {
         _numPages = numPages;
-        _pagesHashMap = new HashMap<>();
+        _pagesHashMap = new HashMap<PageId, Page>();
     }
     
     public static int getPageSize() {
@@ -71,13 +70,16 @@ public class BufferPool {
      */
     public  Page getPage(TransactionId tid, PageId pid, Permissions perm)
         throws TransactionAbortedException, DbException {
-        if (!_pagesHashMap.containsKey(pid.hashCode())) {
+        if (!_pagesHashMap.containsKey(pid)) {
+            if (_pagesHashMap.size() > _numPages - 1) {
+                evictPage();
+            }
             DbFile file = Database.getCatalog().getDatabaseFile(pid.getTableId());
             Page page = file.readPage(pid);
-            _pagesHashMap.put(pid.hashCode(), page);
+            _pagesHashMap.put(pid, page);
             return page;
         } else {
-            return _pagesHashMap.get(pid.hashCode());
+            return _pagesHashMap.get(pid);
         }
     }
 
@@ -169,7 +171,10 @@ public class BufferPool {
     private void updateBufferPool(ArrayList<Page> pagelist,TransactionId tid) throws DbException{
         for(Page p:pagelist){
             p.markDirty(true,tid);
-            _pagesHashMap.put(p.getId().hashCode(), p);
+            if (_pagesHashMap.size() > _numPages - 1) {
+                evictPage();
+            }
+            _pagesHashMap.put(p.getId(), p);
         }
     }
 
@@ -179,9 +184,9 @@ public class BufferPool {
      *     break simpledb if running in NO STEAL mode.
      */
     public synchronized void flushAllPages() throws IOException {
-        // some code goes here
-        // not necessary for lab1
-
+        for (PageId pid : _pagesHashMap.keySet()) {
+            flushPage(pid);
+        }
     }
 
     /** Remove the specific page id from the buffer pool.
@@ -193,8 +198,9 @@ public class BufferPool {
         are removed from the cache so they can be reused safely
     */
     public synchronized void discardPage(PageId pid) {
-        // some code goes here
-        // not necessary for lab1
+        if (_pagesHashMap.containsKey(pid)) {
+            _pagesHashMap.remove(pid);
+        }
     }
 
     /**
@@ -202,8 +208,12 @@ public class BufferPool {
      * @param pid an ID indicating the page to flush
      */
     private synchronized  void flushPage(PageId pid) throws IOException {
-        // some code goes here
-        // not necessary for lab1
+        Page page = _pagesHashMap.get(pid);
+        if (page.isDirty() != null) {
+            DbFile dbFile = Database.getCatalog().getDatabaseFile(pid.getTableId());
+            dbFile.writePage(page);
+            page.markDirty(false, null);
+        }
     }
 
     /** Write all pages of the specified transaction to disk.
@@ -218,8 +228,12 @@ public class BufferPool {
      * Flushes the page to disk to ensure dirty pages are updated on disk.
      */
     private synchronized  void evictPage() throws DbException {
-        // some code goes here
-        // not necessary for lab1
+        PageId pid = new ArrayList<>(_pagesHashMap.keySet()).get(0);
+        try {
+            flushPage(pid);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        discardPage(pid);
     }
-
 }
