@@ -14,6 +14,7 @@ public class Join extends Operator {
     private OpIterator _child1;
     private OpIterator _child2;
     private Tuple t1 = null, t2 = null;
+    private TupleDesc td;
 
     /**
      * Constructor. Accepts two children to join and the predicate to join them
@@ -30,6 +31,8 @@ public class Join extends Operator {
         _p = p;
         _child1 = child1;
         _child2 = child2;
+
+        td = TupleDesc.merge(_child1.getTupleDesc(), _child2.getTupleDesc());
     }
 
     public JoinPredicate getJoinPredicate() {
@@ -107,20 +110,8 @@ public class Join extends Operator {
             while (_child2.hasNext()) {
                 t2 = _child2.next();
                 if (_p.filter(t1, t2)) {
-                    int size = t1.getTupleDesc().numFields() + t2.getTupleDesc().numFields();
-                    Type[] typeAr = new Type[size];
-                    String[] fieldAr = new String[size];
-                    int i = 0, j = 0;
-                    for (; i < t1.getTupleDesc().numFields(); i++) {
-                        typeAr[i] = t1.getTupleDesc().getFieldType(i);
-                        fieldAr[i] = t1.getTupleDesc().getFieldName(i);
-                    }
-                    for (; j < t2.getTupleDesc().numFields(); i++, j++) {
-                        typeAr[i] = t2.getTupleDesc().getFieldType(j);
-                        fieldAr[i] = t2.getTupleDesc().getFieldName(j);
-                    }
-                    TupleDesc td = new TupleDesc(typeAr, fieldAr);
                     Tuple t = new Tuple(td);
+                    int i, j;
                     for (i = 0; i < t1.getTupleDesc().numFields(); i++) {
                         t.setField(i, t1.getField(i));
                     }

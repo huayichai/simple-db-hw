@@ -66,6 +66,15 @@ public class TableStats {
      */
     static final int NUM_HIST_BINS = 100;
 
+
+    private int _tableid;
+    private int _ioCostPerPage;
+    private TupleDesc td;
+    public HeapFile dbFile;
+    private HashMap<Integer, int[]> minmaxMap;
+    private HashMap<Integer, Object> histogramMap; // key -> 列号
+    private int nums; // tuple的数量
+
     /**
      * Create a new TableStats object, that keeps track of statistics on each
      * column of a table
@@ -84,7 +93,83 @@ public class TableStats {
         // You should try to do this reasonably efficiently, but you don't
         // necessarily have to (for example) do everything
         // in a single scan of the table.
-        // some code goes here
+        
+        _tableid = tableid;
+        _ioCostPerPage = ioCostPerPage;
+        Transaction t = new Transaction();
+        dbFile = (HeapFile) Database.getCatalog().getDatabaseFile(_tableid);
+        DbFileIterator it = dbFile.iterator(t.getId());
+        td = dbFile.getTupleDesc();
+        minmaxMap = new HashMap<>();
+        histogramMap = new HashMap<>();
+        nums = 0;
+
+        try {
+            // 初始化两个map
+            if (!it.hasNext()) {
+                return;
+            }
+            Tuple tuple = it.next();
+            for (int i = 0; i < td.numFields(); i++) {
+                if (td.getFieldType(i) == Type.INT_TYPE) {
+                    int value = ((IntField) tuple.getField(i)).getValue();
+                    minmaxMap.put(i, new int[] {value, value});
+                }
+            }
+            it.rewind();
+
+            // 计算int列的最大最小值
+            while (it.hasNext()) {
+                tuple = it.next();
+                nums++;
+                for (int i = 0; i < td.numFields(); i++) {
+                    if (td.getFieldType(i) == Type.INT_TYPE) {
+                        int[] minmax = minmaxMap.get(i);
+                        int min_t = minmax[0];
+                        int max_t = minmax[1];
+                        int value = ((IntField) tuple.getField(i)).getValue();
+                        if (value < min_t) {
+                            minmax[0] = value;
+                        } else if (value > max_t) {
+                            minmax[1] = value;
+                        }
+                        minmaxMap.put(i, minmax);
+                    }
+                }
+            }
+            it.rewind();
+
+            // 构造histogram
+            for (int i = 0; i < td.numFields(); i++) {
+                if (td.getFieldType(i) == Type.INT_TYPE) {
+                    int[] minmax = minmaxMap.get(i);
+                    IntHistogram histogram = new IntHistogram(NUM_HIST_BINS, minmax[0], minmax[1]);
+                    histogramMap.put(i, histogram);
+                } else if (td.getFieldType(i) == Type.STRING_TYPE) {
+                    StringHistogram histogram = new StringHistogram(NUM_HIST_BINS);
+                    histogramMap.put(i, histogram);
+                }
+            }
+
+            // 向histogram中添加数据
+            while (it.hasNext()) {
+                tuple = it.next();
+                for (int i = 0; i < td.numFields(); i++) {
+                    if (td.getFieldType(i) == Type.INT_TYPE) {
+                        IntHistogram histogram = (IntHistogram) histogramMap.get(i);
+                        histogram.addValue(((IntField) tuple.getField(i)).getValue());
+                        histogramMap.put(i, histogram);
+                    } else if (td.getFieldType(i) == Type.STRING_TYPE) {
+                        StringHistogram histogram = (StringHistogram) histogramMap.get(i);
+                        histogram.addValue(((StringField) tuple.getField(i)).getValue());
+                        histogramMap.put(i, histogram);
+                    }
+                }
+            }
+            it.rewind();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 
     /**
@@ -100,8 +185,7 @@ public class TableStats {
      * @return The estimated cost of scanning the table.
      */
     public double estimateScanCost() {
-        // some code goes here
-        return 0;
+        return dbFile.numPages() * IOCOSTPERPAGE;
     }
 
     /**
@@ -114,8 +198,7 @@ public class TableStats {
      *         selectivityFactor
      */
     public int estimateTableCardinality(double selectivityFactor) {
-        // some code goes here
-        return 0;
+        return (int) Math.ceil(totalTuples() * selectivityFactor);
     }
 
     /**
@@ -147,16 +230,22 @@ public class TableStats {
      *         predicate
      */
     public double estimateSelectivity(int field, Predicate.Op op, Field constant) {
-        // some code goes here
-        return 1.0;
+        if (constant.getType() == Type.INT_TYPE) {
+            int value = ((IntField)constant).getValue();
+            IntHistogram histogram = (IntHistogram) histogramMap.get(field);
+            return histogram.estimateSelectivity(op, value);
+        } else {
+            String value = ((StringField)constant).getValue();
+            StringHistogram histogram = (StringHistogram)histogramMap.get(field);
+            return histogram.estimateSelectivity(op, value);
+        }
     }
 
     /**
      * return the total number of tuples in this table
      * */
     public int totalTuples() {
-        // some code goes here
-        return 0;
+        return nums;
     }
 
 }

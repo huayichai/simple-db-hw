@@ -1,9 +1,19 @@
 package simpledb;
 
+import java.util.ArrayList;
+
+import javafx.scene.control.ButtonType;
+import simpledb.Predicate.Op;
+
 /** A class to represent a fixed-width histogram over a single integer-based field.
  */
 public class IntHistogram {
 
+    private int[] buckets;
+    private int _min;
+    private int _max;
+    private int interval;
+    private int ntups;
     /**
      * Create a new IntHistogram.
      * 
@@ -21,7 +31,21 @@ public class IntHistogram {
      * @param max The maximum integer value that will ever be passed to this class for histogramming
      */
     public IntHistogram(int buckets, int min, int max) {
-    	// some code goes here
+        _min = min;
+        _max = max;
+        this.buckets = new int[buckets];
+        interval = (int) Math.ceil((1.0 + max - min)/this.buckets.length);
+        ntups = 0;
+    }
+
+    private int getIndex(int v) {
+        // if (v < _min || v > _max) {
+        //     throw new IllegalArgumentException("value out of range");
+        // }
+        if (v == _max) {
+            return buckets.length - 1;
+        }
+        return (int)((v - _min) / interval);
     }
 
     /**
@@ -29,7 +53,8 @@ public class IntHistogram {
      * @param v Value to add to the histogram
      */
     public void addValue(int v) {
-    	// some code goes here
+        buckets[getIndex(v)]++;
+        ntups++;
     }
 
     /**
@@ -43,9 +68,56 @@ public class IntHistogram {
      * @return Predicted selectivity of this particular operator and value
      */
     public double estimateSelectivity(Predicate.Op op, int v) {
-
-    	// some code goes here
-        return -1.0;
+        int index = getIndex(v);
+        int left = interval * index + _min;
+        int right = (interval + 1) * index + _min - 1;
+        int height;
+        switch (op) {
+            case EQUALS:
+                if (v < _min || v > _max) {
+                    return 0.0;
+                } else {
+                    height = buckets[index];
+                    return (height * 1.0 / interval) / ntups;
+                }
+            case GREATER_THAN:
+                if (v < _min) {
+                    return 1.0;
+                }
+                if (v > _max) {
+                    return 0.0;
+                }
+                height = buckets[index];
+                double p1 = (height * 1.0 / ntups) * ((right - v) * 1.0 / interval);
+                int allInRight = 0;
+                for (int i = index + 1; i < buckets.length; i++) {
+                    allInRight += buckets[i];
+                }
+                double p2 = allInRight * 1.0 / ntups;
+                return p1 + p2;
+            case GREATER_THAN_OR_EQ:
+                return estimateSelectivity(Predicate.Op.GREATER_THAN, v) + estimateSelectivity(Predicate.Op.EQUALS, v);
+            case LESS_THAN:
+                if (v < _min) {
+                    return 0.0;
+                }
+                if (v > _max) {
+                    return 1.0;
+                }
+                height = buckets[index];
+                double pp1 = ((v - left) / interval * 1.0) * (height * 1.0 / ntups);
+                int allInLeft = 0;
+                for (int i = index - 1; i >= 0; i--) {
+                    allInLeft += buckets[i];
+                }
+                double pp2 = allInLeft * 1.0 / ntups;
+                return pp1 + pp2;
+            case LESS_THAN_OR_EQ:
+                return estimateSelectivity(Predicate.Op.LESS_THAN, v) + estimateSelectivity(Predicate.Op.EQUALS, v);
+            case NOT_EQUALS:
+                return 1 - estimateSelectivity(Predicate.Op.EQUALS, v);
+        }
+        return 0.0;
     }
     
     /**
@@ -58,15 +130,16 @@ public class IntHistogram {
      * */
     public double avgSelectivity()
     {
-        // some code goes here
-        return 1.0;
+        int cnt = 0;
+        for(int bucket:buckets) cnt += bucket;
+        if(cnt ==0) return 0.0;
+        return cnt/ntups;
     }
     
     /**
      * @return A string describing this histogram, for debugging purposes
      */
     public String toString() {
-        // some code goes here
-        return null;
+        return String.format("IntHistgram(buckets=%d, min=%d, max=%d", buckets.length, _min, _max);
     }
 }
